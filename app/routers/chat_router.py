@@ -10,6 +10,7 @@ from sqlalchemy import select, and_, or_
 
 from ..deps import get_async_db, get_current_user, get_current_user_ws
 from ..models import ChatRoom, ChatMessage, JobPost
+from ..schemas import ChatRoomCreate, ChatRoomOut
 from ..websocket_manager import ConnectionManager
 
 # =========================
@@ -25,15 +26,18 @@ ws_router = APIRouter(prefix="/ws", tags=["chat"])
 manager = ConnectionManager()
 
 # -------------------------------------------------
-# REST: 채팅방 생성
-# POST /api/chat/rooms?job_post_id=123
+# REST: 채팅방 생성 (JSON body)
+# POST /api/chat/rooms
 # -------------------------------------------------
-@router.post("/rooms")
+@router.post("/rooms", response_model=ChatRoomOut)
 async def create_chat_room(
-    job_post_id: int,
+    payload: ChatRoomCreate,
     db: AsyncSession = Depends(get_async_db),
     user=Depends(get_current_user),
 ):
+    job_post_id = payload.job_post_id
+    student_id = payload.student_id
+
     # 1. 공고 존재 여부 확인
     job_post = await db.get(JobPost, job_post_id)
     if not job_post:
@@ -41,11 +45,14 @@ async def create_chat_room(
 
     # 2. 역할 분기
     if user.role == "STUDENT":
-        student_id = user.id
+        if user.id != student_id:
+            raise HTTPException(status_code=403, detail="Invalid student_id")
+
         company_id = job_post.company_id
+
     elif user.role == "COMPANY":
         company_id = user.id
-        student_id = None
+
     else:
         raise HTTPException(status_code=403, detail="Invalid user role")
 
@@ -80,7 +87,7 @@ async def create_chat_room(
 # REST: 내 채팅방 목록
 # GET /api/chat/rooms
 # -------------------------------------------------
-@router.get("/rooms")
+@router.get("/rooms", response_model=list[ChatRoomOut])
 async def list_my_chat_rooms(
     db: AsyncSession = Depends(get_async_db),
     user=Depends(get_current_user),
@@ -92,8 +99,7 @@ async def list_my_chat_rooms(
         )
     )
     result = await db.execute(stmt)
-    rooms = result.scalars().all()
-    return rooms
+    return result.scalars().all()
 
 
 # =================================================
