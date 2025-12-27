@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
-from ..deps import get_async_db, get_current_user, require_role
+from ..deps import get_async_db, require_role
 from ..models import User, UserRole, JobPost, JobPostImage, JobPostStatus
 from ..schemas import (
     JobPostCreate,
@@ -16,6 +15,10 @@ from ..schemas import (
 router = APIRouter(prefix="/job-posts", tags=["job-posts"])
 
 
+# -------------------------------------------------
+# 공고 생성 (회사만 가능)
+# POST /api/job-posts
+# -------------------------------------------------
 @router.post("", response_model=JobPostOut)
 async def create_job_post(
     payload: JobPostCreate,
@@ -37,6 +40,10 @@ async def create_job_post(
     return job
 
 
+# -------------------------------------------------
+# 공고 목록 조회
+# GET /api/job-posts
+# -------------------------------------------------
 @router.get("", response_model=list[JobPostOut])
 async def list_job_posts(
     db: AsyncSession = Depends(get_async_db),
@@ -45,7 +52,6 @@ async def list_job_posts(
 ):
     stmt = (
         select(JobPost)
-        .options(selectinload(JobPost.images))
         .where(JobPost.is_deleted == False)  # noqa: E712
         .order_by(JobPost.created_at.desc())
     )
@@ -56,10 +62,13 @@ async def list_job_posts(
         stmt = stmt.where(JobPost.region == region)
 
     result = await db.execute(stmt)
-    jobs = result.scalars().all()
-    return jobs
+    return result.scalars().all()
 
 
+# -------------------------------------------------
+# 공고 단건 조회
+# GET /api/job-posts/{job_post_id}
+# -------------------------------------------------
 @router.get("/{job_post_id}", response_model=JobPostOut)
 async def get_job_post(
     job_post_id: int,
@@ -67,7 +76,6 @@ async def get_job_post(
 ):
     stmt = (
         select(JobPost)
-        .options(selectinload(JobPost.images))
         .where(
             JobPost.id == job_post_id,
             JobPost.is_deleted == False,  # noqa: E712
@@ -79,9 +87,14 @@ async def get_job_post(
 
     if not job:
         raise HTTPException(status_code=404, detail="Job post not found")
+
     return job
 
 
+# -------------------------------------------------
+# 공고 수정 (회사만 가능)
+# PUT /api/job-posts/{job_post_id}
+# -------------------------------------------------
 @router.put("/{job_post_id}", response_model=JobPostOut)
 async def update_job_post(
     job_post_id: int,
@@ -90,8 +103,10 @@ async def update_job_post(
     db: AsyncSession = Depends(get_async_db),
 ):
     job = await db.get(JobPost, job_post_id)
+
     if not job or job.is_deleted:
         raise HTTPException(status_code=404, detail="Job post not found")
+
     if job.company_id != user.id:
         raise HTTPException(status_code=403, detail="Not your job post")
 
@@ -103,6 +118,10 @@ async def update_job_post(
     return job
 
 
+# -------------------------------------------------
+# 공고 이미지 추가 (회사만 가능)
+# POST /api/job-posts/{job_post_id}/images
+# -------------------------------------------------
 @router.post("/{job_post_id}/images", response_model=JobPostImageOut)
 async def add_job_post_image(
     job_post_id: int,
@@ -111,8 +130,10 @@ async def add_job_post_image(
     db: AsyncSession = Depends(get_async_db),
 ):
     job = await db.get(JobPost, job_post_id)
+
     if not job or job.is_deleted:
         raise HTTPException(status_code=404, detail="Job post not found")
+
     if job.company_id != user.id:
         raise HTTPException(status_code=403, detail="Not your job post")
 
@@ -123,4 +144,5 @@ async def add_job_post_image(
     db.add(img)
     await db.commit()
     await db.refresh(img)
+
     return img

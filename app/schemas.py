@@ -83,6 +83,7 @@ class JobPostImageOut(BaseModel):
         from_attributes = True
 
 
+# 🔴 images 제거한 버전 (핵심)
 class JobPostOut(BaseModel):
     id: int
     company_id: int
@@ -92,7 +93,6 @@ class JobPostOut(BaseModel):
     region: str
     status: JobPostStatus
     is_deleted: bool
-    images: List[JobPostImageOut] = []
 
     class Config:
         from_attributes = True
