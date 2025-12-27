@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-from ..deps import get_db, get_current_user, require_role
+from ..deps import get_async_db, get_current_user, require_role
 from ..models import User, UserRole, StudentProfile
 from ..schemas import UserOut, StudentProfileUpsert, StudentProfileOut
 
@@ -9,30 +10,33 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.get("/me", response_model=UserOut)
-def me(user: User = Depends(get_current_user)):
+async def me(
+    user: User = Depends(get_current_user),
+):
     return user
 
 
 @router.get("/me/student-profile", response_model=StudentProfileOut)
-def get_my_student_profile(
+async def get_my_student_profile(
     user: User = Depends(require_role(UserRole.STUDENT)),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    profile = db.get(StudentProfile, user.id)
+    profile = await db.get(StudentProfile, user.id)
     if not profile:
         raise HTTPException(status_code=404, detail="Student profile not found")
-    # skills를 리스트로 보이게
+
     profile.skills = profile.skills or []
     return profile
 
 
 @router.put("/me/student-profile", response_model=StudentProfileOut)
-def upsert_my_student_profile(
+async def upsert_my_student_profile(
     payload: StudentProfileUpsert,
     user: User = Depends(require_role(UserRole.STUDENT)),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    profile = db.get(StudentProfile, user.id)
+    profile = await db.get(StudentProfile, user.id)
+
     if not profile:
         profile = StudentProfile(
             user_id=user.id,
@@ -50,7 +54,8 @@ def upsert_my_student_profile(
         profile.skills = payload.skills
         profile.available_time = payload.available_time
 
-    db.commit()
-    db.refresh(profile)
+    await db.commit()
+    await db.refresh(profile)
+
     profile.skills = profile.skills or []
     return profile
