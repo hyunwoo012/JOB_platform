@@ -11,9 +11,6 @@ from .routers.chat_router import router as chat_router
 def create_app() -> FastAPI:
     app = FastAPI(title="Job Platform API")
 
-    # 테이블을 이미 SQL로 만들었으면 이 줄은 선택입니다.
-    # 다만 로컬 테스트에서 편해서 남겨둡니다.
-    Base.metadata.create_all(bind=engine)
 
     app.include_router(auth_router, prefix="/api")
     app.include_router(users_router, prefix="/api")
