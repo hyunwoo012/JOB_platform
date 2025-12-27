@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import or_, select
 
-from ..deps import get_db, create_access_token
+from ..deps import get_async_db, create_access_token
 from ..auth import hash_password, verify_password
 from ..models import User
 from ..schemas import SignupRequest, LoginRequest, TokenResponse, UserOut
@@ -11,19 +11,25 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/signup", response_model=UserOut)
-def signup(payload: SignupRequest, db: Session = Depends(get_db)):
+async def signup(
+    payload: SignupRequest,
+    db: AsyncSession = Depends(get_async_db),
+):
     if not payload.email and not payload.phone:
         raise HTTPException(status_code=422, detail="email or phone required")
 
     # 중복 체크
-    q = []
+    conditions = []
     if payload.email:
-        q.append(User.email == payload.email)
+        conditions.append(User.email == payload.email)
     if payload.phone:
-        q.append(User.phone == payload.phone)
+        conditions.append(User.phone == payload.phone)
 
-    if q:
-        exists = db.query(User).filter(or_(*q)).first()
+    if conditions:
+        result = await db.execute(
+            select(User).where(or_(*conditions))
+        )
+        exists = result.scalar_one_or_none()
         if exists:
             raise HTTPException(status_code=409, detail="email/phone already exists")
 
@@ -35,23 +41,28 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
         is_active=True,
     )
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
+
     return user
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
+async def login(
+    payload: LoginRequest,
+    db: AsyncSession = Depends(get_async_db),
+):
     if not payload.email and not payload.phone:
         raise HTTPException(status_code=422, detail="email or phone required")
 
-    query = db.query(User)
     if payload.email:
-        query = query.filter(User.email == payload.email)
+        stmt = select(User).where(User.email == payload.email)
     else:
-        query = query.filter(User.phone == payload.phone)
+        stmt = select(User).where(User.phone == payload.phone)
 
-    user = query.first()
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
