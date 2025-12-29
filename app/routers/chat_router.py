@@ -38,7 +38,7 @@ async def create_chat_room(
     job_post_id = payload.job_post_id
     student_id = payload.student_id
 
-    # 1. 공고 존재 여부 확인
+    # 1. 공고 존재 여부
     job_post = await db.get(JobPost, job_post_id)
     if not job_post:
         raise HTTPException(status_code=404, detail="Job post not found")
@@ -47,7 +47,6 @@ async def create_chat_room(
     if user.role == "STUDENT":
         if user.id != student_id:
             raise HTTPException(status_code=403, detail="Invalid student_id")
-
         company_id = job_post.company_id
 
     elif user.role == "COMPANY":
@@ -56,7 +55,7 @@ async def create_chat_room(
     else:
         raise HTTPException(status_code=403, detail="Invalid user role")
 
-    # 3. 기존 채팅방 존재 여부 확인
+    # 3. 기존 채팅방 확인
     stmt = select(ChatRoom).where(
         and_(
             ChatRoom.job_post_id == job_post_id,
@@ -70,7 +69,7 @@ async def create_chat_room(
     if room:
         return room
 
-    # 4. 새 채팅방 생성
+    # 4. 채팅방 생성
     room = ChatRoom(
         job_post_id=job_post_id,
         company_id=company_id,
@@ -104,7 +103,7 @@ async def list_my_chat_rooms(
 
 # =================================================
 # WebSocket: 채팅 입장
-# ws://host/api/ws/chat/{chat_room_id}
+# ws://host/api/ws/chat/{chat_room_id}?token=...
 # =================================================
 @ws_router.websocket("/chat/{chat_room_id}")
 async def chat_ws(
@@ -112,16 +111,19 @@ async def chat_ws(
     chat_room_id: int,
     db: AsyncSession = Depends(get_async_db),
 ):
-    # 1. WebSocket JWT 인증
+    # ✅ 1. 반드시 먼저 accept
+    await websocket.accept()
+
+    # ✅ 2. WebSocket JWT 인증
     user = await get_current_user_ws(websocket)
 
-    # 2. 채팅방 접근 권한 확인
+    # 3. 채팅방 접근 권한 확인
     room = await db.get(ChatRoom, chat_room_id)
     if not room or user.id not in (room.company_id, room.student_id):
         await websocket.close(code=1008)
         return
 
-    # 3. 연결 등록
+    # 4. 연결 등록
     await manager.connect(chat_room_id, websocket)
 
     try:
@@ -132,7 +134,7 @@ async def chat_ws(
             if not content:
                 continue
 
-            # 4. 메시지 저장
+            # 5. 메시지 저장
             msg = ChatMessage(
                 chat_room_id=chat_room_id,
                 sender_id=user.id,
@@ -142,7 +144,7 @@ async def chat_ws(
             await db.commit()
             await db.refresh(msg)
 
-            # 5. 같은 방에 브로드캐스트
+            # 6. 같은 방 전체 브로드캐스트
             await manager.broadcast(
                 chat_room_id,
                 {
