@@ -11,7 +11,7 @@ class ConnectionManager:
         """
         채팅방에 WebSocket 연결 추가
         """
-        await websocket.accept()
+
 
         if room_id not in self.active_connections:
             self.active_connections[room_id] = []
