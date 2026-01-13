@@ -32,6 +32,12 @@ class JobPostStatus(str, enum.Enum):
     CLOSED = "CLOSED"
 
 
+class ApplicationStatus(str, enum.Enum):
+    REQUESTED = "REQUESTED"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -55,6 +61,14 @@ class User(Base):
 
     job_posts: Mapped[List["JobPost"]] = relationship("JobPost", back_populates="company")
     sent_messages: Mapped[List["ChatMessage"]] = relationship("ChatMessage", back_populates="sender")
+
+
+    student_applications: Mapped[List["Application"]] = relationship(
+        "Application", foreign_keys="Application.student_id", back_populates="student"
+    )
+    company_applications: Mapped[List["Application"]] = relationship(
+        "Application", foreign_keys="Application.company_id", back_populates="company"
+    )
 
 
 class StudentProfile(Base):
@@ -99,7 +113,12 @@ class JobPost(Base):
     images: Mapped[List["JobPostImage"]] = relationship(
         "JobPostImage", back_populates="job_post", cascade="all, delete-orphan"
     )
+
+    # ChatRoom은 이제 Application 기반으로 생성되지만, job_post 기준 조회는 여전히 유용
     chat_rooms: Mapped[List["ChatRoom"]] = relationship("ChatRoom", back_populates="job_post")
+
+    # (선택) 공고 기준으로 applications를 보고 싶으면 사용
+    applications: Mapped[List["Application"]] = relationship("Application", back_populates="job_post")
 
 
 class JobPostImage(Base):
@@ -114,22 +133,123 @@ class JobPostImage(Base):
     job_post: Mapped["JobPost"] = relationship("JobPost", back_populates="images")
 
 
+class Application(Base):
+    __tablename__ = "applications"
+
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+        autoincrement=True,
+        index=True,
+    )
+
+    job_post_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("job_posts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    student_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    company_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    status: Mapped[ApplicationStatus] = mapped_column(
+        SAEnum(
+            ApplicationStatus,
+            name="application_status",
+            native_enum=True,
+        ),
+        nullable=False,
+        default=ApplicationStatus.REQUESTED,
+    )
+
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    responded_at: Mapped[DateTime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "job_post_id",
+            "student_id",
+            name="uq_application_job_student",
+        ),
+    )
+
+    # relationships
+    job_post: Mapped["JobPost"] = relationship("JobPost", back_populates="applications")
+    student: Mapped["User"] = relationship("User", foreign_keys=[student_id])
+    company: Mapped["User"] = relationship("User", foreign_keys=[company_id])
+
+    # Application 1 : 1 ChatRoom (ACCEPTED일 때만 생성된다는 규칙은 서비스 로직이 담당)
+    chat_room: Mapped[Optional["ChatRoom"]] = relationship(
+        "ChatRoom",
+        back_populates="application",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
 class ChatRoom(Base):
     __tablename__ = "chat_rooms"
+
+    # ✅ 핵심: ChatRoom은 Application 기반으로만 존재해야 한다.
+    # application_id UNIQUE로 1:1을 DB 레벨에서 강제한다.
     __table_args__ = (
-        UniqueConstraint("job_post_id", "company_id", "student_id", name="uq_chat_rooms_unique_pair"),
+        UniqueConstraint("application_id", name="uq_chat_room_application"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    job_post_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("job_posts.id", ondelete="CASCADE"), nullable=False)
 
-    company_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
-    student_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    application_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("applications.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+
+    job_post_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("job_posts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    company_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+
+    student_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
 
     last_message_at: Mapped[Optional[str]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     job_post: Mapped["JobPost"] = relationship("JobPost", back_populates="chat_rooms")
+
+    application: Mapped["Application"] = relationship(
+        "Application",
+        back_populates="chat_room",
+    )
+
     messages: Mapped[List["ChatMessage"]] = relationship(
         "ChatMessage", back_populates="chat_room", cascade="all, delete-orphan"
     )

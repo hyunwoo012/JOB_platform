@@ -10,7 +10,7 @@ from sqlalchemy.orm import DeclarativeBase      # ORM 모델의 부모 클래스
 
 load_dotenv()   # .env 파일을 읽는
 
-DATABASE_URL = os.getenv("DATABASE_URL")    # DATABASE_URL 로딩 및 검증
+DATABASE_URL = os.getenv("ASYNC_DATABASE_URL")    # DATABASE_URL 로딩 및 검증
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL is not set. Put it in .env")
 

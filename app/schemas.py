@@ -3,7 +3,11 @@ from __future__ import annotations
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
-from .models import UserRole, JobPostStatus
+from .models import (
+    UserRole,
+    JobPostStatus,
+    ApplicationStatus,   # ✅ 추가
+)
 
 
 # ---------- Auth ----------
@@ -83,7 +87,6 @@ class JobPostImageOut(BaseModel):
         from_attributes = True
 
 
-# 🔴 images 제거한 버전 (핵심)
 class JobPostOut(BaseModel):
     id: int
     company_id: int
@@ -98,10 +101,28 @@ class JobPostOut(BaseModel):
         from_attributes = True
 
 
+# ---------- Application (채팅 요청) ----------
+class ApplicationCreate(BaseModel):
+    job_post_id: int
+
+
+class ApplicationOut(BaseModel):
+    id: int
+    job_post_id: int
+    student_id: int
+    company_id: int
+    status: ApplicationStatus
+    created_at: str
+    responded_at: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
 # ---------- Chat ----------
 class ChatRoomCreate(BaseModel):
     job_post_id: int
-    student_id: int  # 기업이 열 때 필요
+    student_id: int
 
 
 class ChatRoomOut(BaseModel):
