@@ -5,19 +5,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import AsyncSessionLocal
 from app.models import (
     Application,
     ApplicationStatus,
     JobPost,
     ChatRoom,
+    UserRole,
 )
 from app.schemas import (
     ApplicationCreate,
     ApplicationOut,
 )
-from app.deps import get_current_user
-from app.models import UserRole
+from app.deps import get_current_user, get_async_db
 
 
 router = APIRouter(
@@ -33,7 +32,7 @@ router = APIRouter(
 @router.post("", response_model=ApplicationOut)
 async def create_application(
     data: ApplicationCreate,
-    db: AsyncSession = Depends(AsyncSessionLocal),
+    db: AsyncSession = Depends(get_async_db),
     me=Depends(get_current_user),
 ):
     if me.role != UserRole.STUDENT:
@@ -66,7 +65,7 @@ async def create_application(
 # =========================
 @router.get("/me", response_model=List[ApplicationOut])
 async def list_my_applications(
-    db: AsyncSession = Depends(AsyncSessionLocal),
+    db: AsyncSession = Depends(get_async_db),
     me=Depends(get_current_user),
 ):
     if me.role != UserRole.STUDENT:
@@ -84,7 +83,7 @@ async def list_my_applications(
 @router.get("", response_model=List[ApplicationOut])
 async def list_company_applications(
     status: Optional[ApplicationStatus] = Query(None),
-    db: AsyncSession = Depends(AsyncSessionLocal),
+    db: AsyncSession = Depends(get_async_db),
     me=Depends(get_current_user),
 ):
     if me.role != UserRole.COMPANY:
@@ -104,7 +103,7 @@ async def list_company_applications(
 @router.post("/{application_id}/accept")
 async def accept_application(
     application_id: int,
-    db: AsyncSession = Depends(AsyncSessionLocal),
+    db: AsyncSession = Depends(get_async_db),
     me=Depends(get_current_user),
 ):
     if me.role != UserRole.COMPANY:
@@ -148,7 +147,7 @@ async def accept_application(
 @router.post("/{application_id}/reject")
 async def reject_application(
     application_id: int,
-    db: AsyncSession = Depends(AsyncSessionLocal),
+    db: AsyncSession = Depends(get_async_db),
     me=Depends(get_current_user),
 ):
     if me.role != UserRole.COMPANY:
