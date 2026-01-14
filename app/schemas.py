@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from typing import List, Optional
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 from .models import (
     UserRole,
     JobPostStatus,
-    ApplicationStatus,   # ✅ 추가
+    ApplicationStatus,
 )
 
 
@@ -112,8 +113,8 @@ class ApplicationOut(BaseModel):
     student_id: int
     company_id: int
     status: ApplicationStatus
-    created_at: str
-    responded_at: Optional[str]
+    created_at: datetime  # ✅ str → datetime 변경
+    responded_at: Optional[datetime]  # ✅ str → datetime 변경
 
     class Config:
         from_attributes = True
