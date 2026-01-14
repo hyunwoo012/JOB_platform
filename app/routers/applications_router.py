@@ -23,6 +23,7 @@ from app.models import UserRole
 router = APIRouter(
     prefix="/applications",
     tags=["Applications"],
+    dependencies=[],
 )
 
 
