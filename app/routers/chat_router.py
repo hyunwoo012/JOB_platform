@@ -1,161 +1,110 @@
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-    WebSocket,
-    WebSocketDisconnect,
+from fastapi import (  # FastAPI 컴포넌트
+    APIRouter,  # 라우터
+    Depends,  # 의존성
+    HTTPException,  # 예외
+    WebSocket,  # WebSocket
+    WebSocketDisconnect,  # WS 종료 예외
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
+from sqlalchemy.ext.asyncio import AsyncSession  # 비동기 세션
+from sqlalchemy import select, or_  # SQLAlchemy 조회/조건
 
-from ..deps import get_async_db, get_current_user, get_current_user_ws
-from ..models import ChatRoom, ChatMessage, JobPost
-from ..schemas import ChatRoomCreate, ChatRoomOut
-from ..websocket_manager import ConnectionManager
+from ..deps import get_async_db, get_current_user, get_current_user_ws  # 의존성
+from ..models import ChatRoom, ChatMessage  # 모델
+from ..schemas import ChatRoomOut  # 스키마
+from ..websocket_manager import ConnectionManager  # WS 매니저
 
 # =========================
 # REST Router
 # =========================
-router = APIRouter(prefix="/chat", tags=["chat"])
+router = APIRouter(prefix="/chat", tags=["chat"])  # /chat 라우터
 
 # =========================
 # WebSocket Router
 # =========================
-ws_router = APIRouter(prefix="/ws", tags=["chat"])
+ws_router = APIRouter(prefix="/ws", tags=["chat"])  # /ws 라우터
 
-manager = ConnectionManager()
+manager = ConnectionManager()  # 연결 관리자
 
 # -------------------------------------------------
-# REST: 채팅방 생성 (JSON body)
+# REST: 채팅방 생성 차단 (Application 기반만 허용)
 # POST /api/chat/rooms
 # -------------------------------------------------
-@router.post("/rooms", response_model=ChatRoomOut)
-async def create_chat_room(
-    payload: ChatRoomCreate,
-    db: AsyncSession = Depends(get_async_db),
-    user=Depends(get_current_user),
-):
-    job_post_id = payload.job_post_id
-    student_id = payload.student_id
-
-    # 1. 공고 존재 여부
-    job_post = await db.get(JobPost, job_post_id)
-    if not job_post:
-        raise HTTPException(status_code=404, detail="Job post not found")
-
-    # 2. 역할 분기
-    if user.role == "STUDENT":
-        if user.id != student_id:
-            raise HTTPException(status_code=403, detail="Invalid student_id")
-        company_id = job_post.company_id
-
-    elif user.role == "COMPANY":
-        company_id = user.id
-
-    else:
-        raise HTTPException(status_code=403, detail="Invalid user role")
-
-    # 3. 기존 채팅방 확인
-    stmt = select(ChatRoom).where(
-        and_(
-            ChatRoom.job_post_id == job_post_id,
-            ChatRoom.company_id == company_id,
-            ChatRoom.student_id == student_id,
-        )
+@router.post("/rooms")  # 채팅방 생성 차단
+async def create_chat_room_disabled():  # 핸들러
+    raise HTTPException(  # 명시적 차단
+        status_code=410,  # Gone
+        detail="Chat rooms are created via /applications/{id}/accept only",  # 안내 메시지
     )
-    result = await db.execute(stmt)
-    room = result.scalar_one_or_none()
-
-    if room:
-        return room
-
-    # 4. 채팅방 생성
-    room = ChatRoom(
-        job_post_id=job_post_id,
-        company_id=company_id,
-        student_id=student_id,
-    )
-    db.add(room)
-    await db.commit()
-    await db.refresh(room)
-
-    return room
 
 
 # -------------------------------------------------
 # REST: 내 채팅방 목록
 # GET /api/chat/rooms
 # -------------------------------------------------
-@router.get("/rooms", response_model=list[ChatRoomOut])
-async def list_my_chat_rooms(
-    db: AsyncSession = Depends(get_async_db),
-    user=Depends(get_current_user),
+@router.get("/rooms", response_model=list[ChatRoomOut])  # 채팅방 목록
+async def list_my_chat_rooms(  # 핸들러
+    db: AsyncSession = Depends(get_async_db),  # DB 세션
+    user=Depends(get_current_user),  # 현재 사용자
 ):
-    stmt = select(ChatRoom).where(
-        or_(
-            ChatRoom.company_id == user.id,
-            ChatRoom.student_id == user.id,
+    stmt = select(ChatRoom).where(  # 조회 조건
+        or_(  # OR 조건
+            ChatRoom.company_id == user.id,  # 회사 입장
+            ChatRoom.student_id == user.id,  # 학생 입장
         )
     )
-    result = await db.execute(stmt)
-    return result.scalars().all()
+    result = await db.execute(stmt)  # 조회 실행
+    return result.scalars().all()  # 목록 반환
 
 
 # =================================================
 # WebSocket: 채팅 입장
 # ws://host/api/ws/chat/{chat_room_id}?token=...
 # =================================================
-@ws_router.websocket("/chat/{chat_room_id}")
-async def chat_ws(
-    websocket: WebSocket,
-    chat_room_id: int,
-    db: AsyncSession = Depends(get_async_db),
+@ws_router.websocket("/chat/{chat_room_id}")  # WS 라우트
+async def chat_ws(  # WS 핸들러
+    websocket: WebSocket,  # 소켓
+    chat_room_id: int,  # 채팅방 ID
+    db: AsyncSession = Depends(get_async_db),  # DB 세션
 ):
-    # ✅ 1. 반드시 먼저 accept
-    await websocket.accept()
+    await websocket.accept()  # 연결 수락
 
-    # ✅ 2. WebSocket JWT 인증
-    user = await get_current_user_ws(websocket)
+    user = await get_current_user_ws(websocket)  # WS 사용자 인증
 
-    # 3. 채팅방 접근 권한 확인
-    room = await db.get(ChatRoom, chat_room_id)
-    if not room or user.id not in (room.company_id, room.student_id):
-        await websocket.close(code=1008)
-        return
+    room = await db.get(ChatRoom, chat_room_id)  # 채팅방 조회
+    if not room or user.id not in (room.company_id, room.student_id):  # 접근 권한 확인
+        await websocket.close(code=1008)  # 정책 위반 종료
+        return  # 종료
 
-    # 4. 연결 등록
-    await manager.connect(chat_room_id, websocket)
+    await manager.connect(chat_room_id, websocket)  # 연결 등록
 
     try:
-        while True:
-            data = await websocket.receive_json()
-            content = data.get("content")
+        while True:  # 메시지 루프
+            data = await websocket.receive_json()  # JSON 수신
+            content = data.get("content")  # 메시지 내용
 
-            if not content:
-                continue
+            if not content:  # 내용 없으면
+                continue  # 무시
 
-            # 5. 메시지 저장
-            msg = ChatMessage(
-                chat_room_id=chat_room_id,
-                sender_id=user.id,
-                content=content,
+            msg = ChatMessage(  # 메시지 생성
+                chat_room_id=chat_room_id,  # 방 ID
+                sender_id=user.id,  # 발신자
+                content=content,  # 내용
             )
-            db.add(msg)
-            await db.commit()
-            await db.refresh(msg)
+            db.add(msg)  # 세션 추가
+            await db.commit()  # 커밋
+            await db.refresh(msg)  # DB 반영
 
-            # 6. 같은 방 전체 브로드캐스트
-            await manager.broadcast(
-                chat_room_id,
+            await manager.broadcast(  # 브로드캐스트
+                chat_room_id,  # 방 ID
                 {
-                    "type": "message",
-                    "id": msg.id,
-                    "chat_room_id": chat_room_id,
-                    "sender_id": msg.sender_id,
-                    "content": msg.content,
-                    "created_at": msg.created_at.isoformat(),
+                    "type": "message",  # 메시지 타입
+                    "id": msg.id,  # 메시지 ID
+                    "chat_room_id": chat_room_id,  # 방 ID
+                    "sender_id": msg.sender_id,  # 발신자 ID
+                    "content": msg.content,  # 내용
+                    "created_at": msg.created_at.isoformat(),  # 시각
                 },
             )
 
     except WebSocketDisconnect:
-        manager.disconnect(chat_room_id, websocket)
+        manager.disconnect(chat_room_id, websocket)  # 연결 해제
