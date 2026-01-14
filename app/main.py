@@ -17,8 +17,8 @@ def create_app() -> FastAPI:
     app.include_router(users_router, prefix="/api") # include_router() users_router에 정의된 모든 route를 순회
     app.include_router(posts_router, prefix="/api") # 각 route의 path 앞에 /api를 붙임, 라이팅 테이블에 등록
     app.include_router(chat_ws_router, prefix="/api")
+    app.include_router(applications_router, prefix="/api")  # 🔥 더 구체적인 것 먼저
     app.include_router(chat_router, prefix="/api")
-    app.include_router(applications_router, prefix="/api")
 
     @app.get("/health")         # 서버가 살아있는지 확인하기 위한 health check
     def health():

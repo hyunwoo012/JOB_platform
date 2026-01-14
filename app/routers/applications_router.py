@@ -21,7 +21,7 @@ from app.models import UserRole
 
 
 router = APIRouter(
-    prefix="/chat/applications",
+    prefix="/applications",
     tags=["Applications"],
 )
 
