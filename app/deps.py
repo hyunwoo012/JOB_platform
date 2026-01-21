@@ -68,6 +68,44 @@ async def get_current_user(  # 현재 사용자 확인
 
 
 # =========================
+# ✅ 새로 추가: Optional User (Swagger 테스트용)
+# =========================
+async def get_current_user_optional(
+        authorization: Optional[str] = Header(default=None),
+        db: AsyncSession = Depends(get_async_db),
+) -> Optional[User]:
+    """
+    Optional authentication dependency (Swagger 테스트용)
+
+    - Authorization header가 있고 유효하면 → User 반환
+    - header가 없거나 유효하지 않으면 → None 반환 (401 에러 없음)
+
+    Usage:
+        user: Optional[User] = Depends(get_current_user_optional)
+    """
+    if not authorization:
+        return None
+    # "Bearer {token}" 형식에서 토큰 추출
+    if not authorization.startswith("Bearer "):
+        return None
+
+    token = authorization.replace("Bearer ", "").strip()
+
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        user_id = int(payload.get("sub"))
+    except (JWTError, ValueError):
+        return None
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if not user or not user.is_active:
+        return None
+
+    return user
+
+# =========================
 # Role Guard (ASYNC)
 # =========================
 def require_role(*roles: UserRole):  # 역할 제한 데코레이터
