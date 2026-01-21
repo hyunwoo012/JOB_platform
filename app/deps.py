@@ -2,7 +2,7 @@ import os  # 환경 변수 접근
 from datetime import datetime, timedelta, timezone  # 시간 계산
 from typing import Optional  # Optional 타입
 
-from fastapi import Depends, HTTPException, WebSocket  # FastAPI 의존성/예외/WS
+from fastapi import Depends, HTTPException, WebSocket, Header  # FastAPI 의존성/예외/WS
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer  # 베어러 인증
 from jose import JWTError, jwt  # JWT 인코딩/디코딩
 from sqlalchemy.ext.asyncio import AsyncSession  # 비동기 세션
