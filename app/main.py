@@ -8,6 +8,7 @@ from .routers.posts_router import router as posts_router  # 공고 라우터
 from .routers.chat_router import router as chat_router  # 채팅 REST 라우터
 from .routers.chat_router import ws_router as chat_ws_router  # 채팅 WS 라우터
 from .routers.applications_router import router as applications_router  # 지원(신청) 라우터
+from .routers.chatbot_router import router as chatbot_router
 
 
 def create_app() -> FastAPI:  # 앱 팩토리 함수
@@ -19,6 +20,7 @@ def create_app() -> FastAPI:  # 앱 팩토리 함수
     app.include_router(chat_ws_router, prefix="/api")  # /api/ws 계열 라우트 등록
     app.include_router(applications_router, prefix="/api")  # /api/applications 계열 라우트 등록
     app.include_router(chat_router, prefix="/api")  # /api/chat 계열 라우트 등록
+    app.include_router(chatbot_router, prefix="/api")
 
     @app.get("/health")  # 헬스체크 엔드포인트
     def health():  # 간단한 상태 확인 핸들러

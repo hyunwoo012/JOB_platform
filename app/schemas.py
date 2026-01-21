@@ -143,3 +143,11 @@ class ChatMessageOut(BaseModel):  # 채팅 메시지 응답
 
     class Config:  # Pydantic 설정
         from_attributes = True  # ORM 객체 지원
+
+# -------------- Chatbot --------------
+class ChatbotRequest(BaseModel):
+    message: str
+
+class ChatbotResponse(BaseModel):
+    reply: str
+    source: str = "rule_based"
