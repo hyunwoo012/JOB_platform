@@ -34,7 +34,7 @@ async def chat_with_bot(
 
 @router.get("/intents")
 async def get_available_intents(
-        user: User = Depends(get_current_user),
+        user: Optional[User] = Depends(get_current_user_optional),
 ):
     """
     List of topics that chatbots can understand
