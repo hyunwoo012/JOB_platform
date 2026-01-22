@@ -41,11 +41,12 @@ async def get_available_intents(
     """
     return {
         "intents": [
-            {"name": "인사", "examples": ["안녕", "hi", "hello"]},
-            {"name": "일자리 검색", "examples": ["알바", "구인", "공고"]},
-            {"name": "지원 방법", "examples": ["지원", "신청", "방법"]},
-            {"name": "급여 정보", "examples": ["급여", "시급", "얼마"]},
-            {"name": "프로필", "examples": ["프로필", "이력서", "정보"]},
-            {"name": "도움말", "examples": ["도움", "help", "문의"]},
+        { "name": "Greeting", "examples": ["hi", "hello", "hey"] },
+        { "name": "Job Search", "examples": ["job", "part-time", "hiring"] },
+        { "name": "Application Guide", "examples": ["apply", "application", "how"] },
+        { "name": "Wage Information", "examples": ["wage", "pay", "salary"] },
+        { "name": "Profile", "examples": ["profile", "resume", "information"] },
+        { "name": "Help", "examples": ["help", "support", "question"] }
         ]
+
     }
